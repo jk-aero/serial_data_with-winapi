@@ -94,9 +94,13 @@ int main(void)
         std::cout << "give proper option";
         return 0;
     }
-    else {
+    else if (comPortList.size() > 0) {
+        std::cout << "gonna create the handle";
+        std::wstring port = L"\\\\.\\";
+        port += comPortList[option - 1];
 
-        LPCWSTR portName = comPortList[option-1].c_str();
+        LPCWSTR portName = port.c_str();
+        portName;
         //Open the serial com port
         hComm = CreateFile(
             portName,                          //friendly name
@@ -106,34 +110,53 @@ int main(void)
             OPEN_EXISTING,                     // Open existing port only
             0,                                 // Non Overlapped I/O
             NULL);                             // Null for Comm Devices
+
+        DWORD errMsg = GetLastError();
         if (hComm == INVALID_HANDLE_VALUE)
         {
             printf_s("\n Port can't be opened\n\n");
+           
+
+            if (errMsg == 2)
+            {
+                printf_s("\n nothinf is plugged in\n\n");
+                goto Exit2;
+            }
+            else if (errMsg == 5)
+            {
+                printf_s("\nanother app is already using the port\n\n");
+                goto Exit2;
+            }
             goto Exit2;
         }
-        //Setting the Parameters for the SerialPort
-        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-        Status = GetCommState(hComm, &dcbSerialParams); //retreives  the current settings
-        if (Status == FALSE)
-        {
-            printf_s("\nError to Get the Com state\n\n");
-            goto Exit1;
+        else if (errMsg == 0) {
+
+
+
+            //Setting the Parameters for the SerialPort
+            dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+            Status = GetCommState(hComm, &dcbSerialParams); //retreives  the current settings
+            if (Status == FALSE)
+            {
+                printf_s("\nError to Get the Com state\n\n");
+                goto Exit1;
+            }
+            dcbSerialParams.BaudRate = CBR_9600;      //BaudRate = 9600
+            dcbSerialParams.ByteSize = 8;             //ByteSize = 8
+            dcbSerialParams.StopBits = ONESTOPBIT;    //StopBits = 1
+            dcbSerialParams.Parity = NOPARITY;      //Parity = None
+            Status = SetCommState(hComm, &dcbSerialParams);
+            if (Status == FALSE)
+            {
+                printf_s("\nError to Setting DCB Structure\n\n");
+                goto Exit1;
+            }
         }
-        dcbSerialParams.BaudRate = CBR_9600;      //BaudRate = 9600
-        dcbSerialParams.ByteSize = 8;             //ByteSize = 8
-        dcbSerialParams.StopBits = ONESTOPBIT;    //StopBits = 1
-        dcbSerialParams.Parity = NOPARITY;      //Parity = None
-        Status = SetCommState(hComm, &dcbSerialParams);
-        if (Status == FALSE)
-        {
-            printf_s("\nError to Setting DCB Structure\n\n");
-            goto Exit1;
+        Exit1:
+            CloseHandle(hComm);//Closing the Serial Port
+        Exit2:
+            system("pause");
         }
-        
-    Exit1:
-        CloseHandle(hComm);//Closing the Serial Port
-    Exit2:
-        system("pause");
-    }
+    
     return 0;
 }
