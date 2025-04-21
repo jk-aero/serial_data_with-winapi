@@ -4,9 +4,11 @@
 #include <string.h>
 #include <iostream>
 #include <tchar.h>
+#include<conio.h>
 #include<string>
 #include<vector>
 
+#define BUF_SIZE 2048
 
 
 void GetComPortNames(std::vector<std::wstring>&comPortList )
@@ -64,8 +66,7 @@ int main(void)
 
     GetComPortNames(comPortList);
     printComPortNames(comPortList);
-
-
+   
 
 
 
@@ -83,6 +84,13 @@ int main(void)
     unsigned char loop = 0;
     wchar_t pszPortName[10] = { 0 }; //com port id
     wchar_t PortNo[20] = { 0 }; //contain friendly name
+
+
+    //to read from serial com port
+
+    char buffer[256];
+    DWORD bytesRead;
+    DWORD totalRead = 0;
 
 
 
@@ -131,6 +139,23 @@ int main(void)
         }
         else if (errMsg == 0) {
 
+            COMMTIMEOUTS comm_timeouts;
+            if (!GetCommTimeouts(hComm, &comm_timeouts)) {
+                return 5;
+            }
+
+            comm_timeouts.ReadIntervalTimeout = 0;
+            comm_timeouts.ReadTotalTimeoutMultiplier = 0;
+            comm_timeouts.ReadTotalTimeoutConstant = 1;
+            comm_timeouts.WriteTotalTimeoutMultiplier = 0;
+            comm_timeouts.WriteTotalTimeoutConstant = 0;
+            SetCommTimeouts(hComm, &timeouts);
+
+
+
+            if (!SetCommTimeouts(hComm, &comm_timeouts)) {
+                return 6;
+            }
 
 
             //Setting the Parameters for the SerialPort
@@ -146,11 +171,68 @@ int main(void)
             dcbSerialParams.StopBits = ONESTOPBIT;    //StopBits = 1
             dcbSerialParams.Parity = NOPARITY;      //Parity = None
             Status = SetCommState(hComm, &dcbSerialParams);
+
+
             if (Status == FALSE)
             {
                 printf_s("\nError to Setting DCB Structure\n\n");
                 goto Exit1;
             }
+
+            if (!SetCommMask(hComm, EV_RXCHAR | EV_ERR)) {
+                printf("SetCommMask failed with error code: %ld\n", GetLastError());
+                goto Exit2;
+            }
+
+            DWORD dwEvtMask;
+         
+           while(!(GetAsyncKeyState(VK_ESCAPE) & 0x01))
+           {
+               dwEvtMask = 0;// reset mask for each itereation
+
+               // Wait for event with timeout
+               if (!WaitCommEvent(hComm, &dwEvtMask, NULL))
+               {
+                   printf("WaitCommEvent failed: %d\n", GetLastError());
+                   break;
+               }
+
+               if (dwEvtMask & EV_ERR)
+               {
+                   printf("Port error: %d\n", GetLastError());
+                   break;
+               }
+
+
+
+               if (dwEvtMask & EV_RXCHAR)
+               {
+                   bytesRead = 0;
+                   if (!ReadFile(hComm, buffer, sizeof(buffer), &bytesRead, NULL))
+                   {
+                       if (GetLastError() != ERROR_IO_PENDING)
+                       {
+                           printf("Read error: %d\n", GetLastError());
+                           break;
+                       }
+                   }
+
+                   if (bytesRead > 0)
+                   {
+                       // Process the new data immediately
+                       printf("Received %lu bytes: %.*s\n", bytesRead, bytesRead, buffer);
+
+                       // Clear buffer for next read
+                       memset(buffer, 0, sizeof(buffer));
+                       totalRead = 0;
+                   }
+               }
+              
+
+           }
+        
+           
+
         }
         Exit1:
             CloseHandle(hComm);//Closing the Serial Port
